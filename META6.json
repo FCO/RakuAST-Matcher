@@ -1,0 +1,17 @@
+{
+  "auth": "zef:FCO",
+  "build-depends": [
+  ],
+  "depends": [
+  ],
+  "description": "A brand new and very nice module",
+  "name": "RakuAST::Matcher",
+  "provides": {
+    "RakuAST::Matcher": "lib/RakuAST/Matcher.rakumod"
+  },
+  "resources": [
+  ],
+  "test-depends": [
+  ],
+  "version": "0.0.1"
+}
