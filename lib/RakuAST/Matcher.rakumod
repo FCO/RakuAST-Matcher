@@ -11,19 +11,23 @@ class Match does Positional does Associative {
     method of { Match }
 
     multi method gist(::?CLASS:D:) {
-        qq:to<END>.chomp;
-        ｢{
-          .DEPARSE with $!node
-        }｣{
-            do if @!positional {
-                "\n" ~ @!positional.kv.map(-> $i, $_ { "$i => { .gist }" }).join("\n").indent: 1
+        with $!node {
+            qq:to<END>.chomp;
+            ｢{
+              .DEPARSE
+            }｣{
+                do if @!positional {
+                    "\n" ~ @!positional.kv.map(-> $i, $_ { "$i => { .gist }" }).join("\n").indent: 1
+                }
+            }{
+                do if %!named {
+                    "\n" ~ %!named.kv.map(-> $i, $_ {"$i => { .gist }"}).join("\n").indent: 1
+                }
             }
-        }{
-            do if %!named {
-                "\n" ~ %!named.kv.map(-> $i, $_ {"$i => { .gist }"}).join("\n").indent: 1
-            }
+            END
+        } else {
+            @!positional.map(*.gist).join("\n")
         }
-        END
     }
 }
 
@@ -31,11 +35,14 @@ method ACCEPTS($ast) {
     match $!ast, $ast
 }
 
-multi method search(Str $ast) {
+multi method search(Str $ast --> Match) {
     self.search($ast.AST)
 }
-multi method search(RakuAST::Node $ast) {
-    Match.new: :node($ast), :positional($ast.map({ match $!ast, $_ }).grep({ .defined }))
+multi method search(RakuAST::Node $ast --> Match) {
+    my @positional = $ast.map({ match $!ast, $_ }).grep({ .defined });
+    @positional
+    ?? Match.new(:@positional)
+    !! Match
 }
 
 proto ast-matcher(|c) is export {*}
@@ -88,7 +95,7 @@ for [ &ANYTHING, &ANY-FUNCTION, &ANY-FUNCTION-WITH-ARGS, &ANY-FUNCTION-NAMED ] -
     $matcher does MatcherFunction;
 }
 
-proto match($needle, $ast) is export {
+proto match($needle, $ast --> Match) is export {
     DEBUG $?LINE, ": ", $needle.^name, " ~~ ", $ast.^name;
     my @*positional;
     my %*named;
@@ -105,7 +112,7 @@ multi match(Str $needle, RakuAST::Node $haystack) {
 }
 
 multi match(
-    RakuAST::Call::Name $needle where { ::("&{ .name.canonicalize }").is-matcher-function },
+    RakuAST::Call::Name $needle where { ::("&{ .name.canonicalize }").?is-matcher-function },
     RakuAST::Node       $ast where { True },
 ) {
     DEBUG $?LINE, ": ", $needle.^name, " ~~ ", $ast.^name;
@@ -119,66 +126,23 @@ multi match(RakuAST::Name $needle, RakuAST::Name $ast) {
     $needle.canonicalize eq $ast.canonicalize
 }
 
-multi match(RakuAST::ApplyInfix $needle, RakuAST::ApplyInfix $ast) {
+multi match(::T RakuAST::Literal $needle, T $ast) {
     DEBUG $?LINE, ": ", $needle.^name, " ~~ ", $ast.^name;
-       match($needle.left , $ast.left )
-     & match($needle.right, $ast.right)
-     & match($needle.infix, $ast.infix)
+    $needle.value ~~ $ast.value
 }
 
-multi match(RakuAST::ApplyPostfix $needle, RakuAST::ApplyPostfix $ast) {
+multi match(::T RakuAST::Node $needle where {.^can: "operator"}, T $ast) {
     DEBUG $?LINE, ": ", $needle.^name, " ~~ ", $ast.^name;
-       match($needle.operand, $ast.operand)
-     & match($needle.postfix, $ast.postfix)
-}
-
-multi match(
-    RakuAST::Call::Name $needle,
-    RakuAST::Call::Name $ast where {
-        my $f = ::("&{ .name.canonicalize }");
-        $f.Bool && $f.?is-matcher-function
-    }
-) {
-    DEBUG $?LINE, ": ", $needle.^name, " ~~ ", $ast.^name;
-       match($needle.name, $ast.name)
-     & match($needle.args, $ast.args)
-}
-
-multi match(RakuAST::Infix $needle, RakuAST::Infix $ast) {
-    DEBUG $?LINE, ": ", $needle.^name, " ~~ ", $ast.^name;
-    $needle.operator eq $ast.operator
-}
-
-multi match(RakuAST::VarDeclaration::Simple $needle, RakuAST::VarDeclaration::Simple $ast) {
-    DEBUG $?LINE, ": ", $needle.^name, " ~~ ", $ast.^name;
-       ($needle.?name // "") eq ($ast.?name // "")
-     & match($needle.?initializer, $ast.?initializer)
-}
-
-multi match(RakuAST::Initializer $needle, RakuAST::Initializer $ast) {
-    DEBUG $?LINE, ": ", $needle.^name, " ~~ ", $ast.^name;
-    match($needle.?expression, $ast.?expression)
-}
-
-multi match(RakuAST::Initializer::Assign $needle, RakuAST::Initializer::Assign $ast) {
-    DEBUG $?LINE, ": ", $needle.^name, " ~~ ", $ast.^name;
-       match($needle.expression, $ast.expression)
-}
-
-multi match(RakuAST::ArgList $needle, RakuAST::ArgList $ast) {
-    DEBUG $?LINE, ": ", $needle.^name, " ~~ ", $ast.^name;
-    ($needle.args Z $ast.args).map({ match(|$_) }).all
-}
-
-multi match(RakuAST::IntLiteral $needle, RakuAST::IntLiteral $ast) {
-    DEBUG $?LINE, ": ", $needle.^name, " ~~ ", $ast.^name;
-    $needle.value == $ast.value
+    $needle.operator ~~ $ast.operator
 }
 
 multi match(::T RakuAST::Node $needle, T $ast) {
     DEBUG $?LINE, ": ", $needle.^name, " ~~ ", $ast.^name;
-    note "{ T.^name } matcher not implemented yet: ", $ast;
-    False
+    my @needle = gather { $needle.visit-children: *.take };
+    my @ast    = gather { $ast.visit-children: *.take };
+
+    #@needle ~~ @ast
+    [&&] (@needle Z @ast).map({ match(|$_) })
 }
 
 multi match($needle, $ast) {
