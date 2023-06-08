@@ -69,83 +69,95 @@ sub ANYTHING(
     RakuAST::Call::Name $needle,
     RakuAST::Node       $ast,
 ) is export {
-    %*named<ANYTHING> = Match.new(node => $ast)
+    my @*positional;
+    my %*named;
+    Match.new: node => $ast, :@*positional, :%*named
 }
 sub ANY-FUNCTION(
     RakuAST::Call::Name $needle,
     RakuAST::Call::Name $ast,
 ) is export {
-    %*named<ANY-FUNCTION> = Match.new(node => $ast)
+    my @*positional;
+    my %*named;
+    Match.new: node => $ast, :@*positional, :%*named
 }
 sub ANY-FUNCTION-WITH-ARGS(
     RakuAST::Call::Name $needle,
     RakuAST::Call::Name $ast,
 ) is export {
+    my @*positional;
+    my %*named;
     match($needle.args, $ast.args)
-    && (%*named<ANY-FUNCTION-WITH-ARGS> = Match.new(node => $ast, :@*positional, :%*named))
+    && Match.new: node => $ast, :@*positional, :%*named
 }
 sub ANY-FUNCTION-NAMED(
     RakuAST::Call::Name $needle,
     RakuAST::Call::Name $ast where *.name.canonicalize eq $needle.args.args.head.literal-value,
 ) is export {
-    %*named<ANY-FUNCTION-NAMED> = Match.new(node => $ast)
+    my @*positional;
+    my %*named;
+    Match.new: node => $ast, :@*positional, :%*named
 }
 
 for [ &ANYTHING, &ANY-FUNCTION, &ANY-FUNCTION-WITH-ARGS, &ANY-FUNCTION-NAMED ] -> $matcher {
     $matcher does MatcherFunction;
 }
 
-proto match($needle, $ast --> Match) is export {
+sub match($needle, $ast) is export {
     DEBUG $?LINE, ": ", $needle.^name, " ~~ ", $ast.^name;
     my @*positional;
     my %*named;
-    my Bool() $res = so {*};
+    my Bool() $res = so _match $needle, $ast;
 
     $res
     ?? Match.new(node => $ast, :@*positional, :%*named)
     !! Match
 }
 
-multi match(Str $needle, RakuAST::Node $haystack) {
+proto _match($needle, $ast --> Match) {*}
+
+multi _match(Str $needle, RakuAST::Node $haystack) {
     my $ast  = $needle.AST.statements[0].expression;
     match $ast, $haystack
 }
 
-multi match(
+multi _match(
     RakuAST::Call::Name $needle where { ::("&{ .name.canonicalize }").?is-matcher-function },
     RakuAST::Node       $ast where { True },
 ) {
     DEBUG $?LINE, ": ", $needle.^name, " ~~ ", $ast.^name;
     my &func = ::("&{ $needle.name.canonicalize }");
     return False unless \($needle, $ast) ~~ &func.signature;
-    func $needle, $ast
+    my $ret = func $needle, $ast;
+    %*named.push: $needle.name.canonicalize => $_ with $ret;
+    $ret
 }
 
-multi match(RakuAST::Name $needle, RakuAST::Name $ast) {
+multi _match(RakuAST::Name $needle, RakuAST::Name $ast) {
     DEBUG $?LINE, ": ", $needle.^name, " ~~ ", $ast.^name;
     $needle.canonicalize eq $ast.canonicalize
 }
 
-multi match(::T RakuAST::Literal $needle, T $ast) {
+multi _match(::T RakuAST::Literal $needle, T $ast) {
     DEBUG $?LINE, ": ", $needle.^name, " ~~ ", $ast.^name;
     $needle.value ~~ $ast.value
 }
 
-multi match(::T RakuAST::Node $needle where {.^can: "operator"}, T $ast) {
+multi _match(::T RakuAST::Node $needle where {.^can: "operator"}, T $ast) {
     DEBUG $?LINE, ": ", $needle.^name, " ~~ ", $ast.^name;
     $needle.operator ~~ $ast.operator
 }
 
-multi match(::T RakuAST::Node $needle, T $ast) {
+multi _match(::T RakuAST::Node $needle, T $ast) {
     DEBUG $?LINE, ": ", $needle.^name, " ~~ ", $ast.^name;
     my @needle = gather { $needle.visit-children: *.take };
     my @ast    = gather { $ast.visit-children: *.take };
 
     #@needle ~~ @ast
-    [&&] (@needle Z @ast).map({ match(|$_) })
+    [&&] (@needle Z @ast).map({ _match(|$_) })
 }
 
-multi match($needle, $ast) {
+multi _match($needle, $ast) {
     DEBUG $?LINE, ": ", $needle.^name, " ~~ ", $ast.^name;
     False
 }
