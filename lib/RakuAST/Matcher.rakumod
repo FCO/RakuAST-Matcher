@@ -1,48 +1,23 @@
 use v6.e.PREVIEW;
+use RakuAST::Matcher::ASTMatch;
+use RakuAST::Matcher::ASTMatcherFunction;
 
 unit class RakuAST::Matcher;
 
 has RakuAST::Node $.ast;
 
-class Match does Positional does Associative {
-    has @.positional; # handles <AT-POS EXISTS-POS>;
-    has %.named     ; # handles <keys AT-KEY EXISTS-KEY>;
-    has RakuAST::Node $.node;
-    method of { Match }
-
-    multi method gist(::?CLASS:D:) {
-        with $!node {
-            qq:to<END>.chomp;
-            ｢{
-              .DEPARSE
-            }｣{
-                do if @!positional {
-                    "\n" ~ @!positional.kv.map(-> $i, $_ { "$i => { .gist }" }).join("\n").indent: 1
-                }
-            }{
-                do if %!named {
-                    "\n" ~ %!named.kv.map(-> $i, $_ {"$i => { .gist }"}).join("\n").indent: 1
-                }
-            }
-            END
-        } else {
-            @!positional.map(*.gist).join("\n")
-        }
-    }
-}
-
 method ACCEPTS($ast) {
     match $!ast, $ast
 }
 
-multi method search(Str $ast --> Match) {
+multi method search(Str $ast --> ASTMatch) {
     self.search($ast.AST)
 }
-multi method search(RakuAST::Node $ast --> Match) {
+multi method search(RakuAST::Node $ast --> ASTMatch) {
     my @positional = $ast.map({ match $!ast, $_ }).grep({ .defined });
     @positional
-    ?? Match.new(:@positional)
-    !! Match
+    ?? ASTMatch.new(:@positional)
+    !! ASTMatch
 }
 
 proto ast-matcher(|c) is export {*}
@@ -56,39 +31,30 @@ multi ast-matcher(RakuAST::Node $needle) {
     RakuAST::Matcher.new(ast => $needle)
 }
 
-role MatcherFunction {
-    method is-matcher-function { True }
-}
-
-# sub trait_mod:<is>(&func, Bool :$matcher-function) {
-#     # trait_mod:<is>(&func, :export);
-#     &func does MatcherFunction
-# }
-
 sub ANYTHING(
     RakuAST::Call::Name $needle,
     RakuAST::Node       $ast,
-) is export {
+) is matcher-function {
     my @*positional;
     my %*named;
-    Match.new: node => $ast, :@*positional, :%*named
+    ASTMatch.new: node => $ast, :@*positional, :%*named
 }
 sub ANY-FUNCTION(
     RakuAST::Call::Name $needle,
     RakuAST::Call::Name $ast,
-) is export {
+) is matcher-function {
     my @*positional;
     my %*named;
-    Match.new: node => $ast, :@*positional, :%*named
+    ASTMatch.new: node => $ast, :@*positional, :%*named
 }
 sub ANY-FUNCTION-WITH-ARGS(
     RakuAST::Call::Name $needle,
     RakuAST::Call::Name $ast,
-) is export {
+) is matcher-function {
     my @*positional;
     my %*named;
     match($needle.args, $ast.args)
-    && Match.new: node => $ast, :@*positional, :%*named
+    && ASTMatch.new: node => $ast, :@*positional, :%*named
 }
 sub ANY-FUNCTION-NAMED(
     RakuAST::Call::Name $needle,
@@ -96,11 +62,7 @@ sub ANY-FUNCTION-NAMED(
 ) is export {
     my @*positional;
     my %*named;
-    Match.new: node => $ast, :@*positional, :%*named
-}
-
-for [ &ANYTHING, &ANY-FUNCTION, &ANY-FUNCTION-WITH-ARGS, &ANY-FUNCTION-NAMED ] -> $matcher {
-    $matcher does MatcherFunction;
+    ASTMatch.new: node => $ast, :@*positional, :%*named
 }
 
 sub match($needle, $ast) is export {
@@ -110,11 +72,11 @@ sub match($needle, $ast) is export {
     my Bool() $res = so _match $needle, $ast;
 
     $res
-    ?? Match.new(node => $ast, :@*positional, :%*named)
-    !! Match
+    ?? ASTMatch.new(node => $ast, :@*positional, :%*named)
+    !! ASTMatch
 }
 
-proto _match($needle, $ast --> Match) {*}
+proto _match($needle, $ast --> ASTMatch) {*}
 
 multi _match(Str $needle, RakuAST::Node $haystack) {
     my $ast  = $needle.AST.statements[0].expression;

@@ -7,7 +7,9 @@
   "description": "A brand new and very nice module",
   "name": "RakuAST::Matcher",
   "provides": {
-    "RakuAST::Matcher": "lib/RakuAST/Matcher.rakumod"
+      "RakuAST::Matcher": "lib/RakuAST/Matcher.rakumod",
+      "RakuAST::Matcher::ASTMatch": "lib/RakuAST/Matcher/ASTMatch.rakumod",
+      "RakuAST::Matcher::ASTMatcherFunction": "lib/RakuAST/Matcher/ASTMatcherFunction.rakumod"
   },
   "resources": [
   ],

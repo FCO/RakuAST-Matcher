@@ -19,7 +19,7 @@ say ast-matcher("1 + ANYTHING").search: "say 1 + 2 + 3 + 4";
 #  ANYTHING => ｢2｣
 
 say ast-matcher("1 - ANYTHING").search: "say 1 + 2 + 3 + 4";
-# (Match)
+# (ASTMatch)
 
 say ast-matcher("1").search: "say 1 + 2 + 3 + 4";
 # ｢1｣
