@@ -1,7 +1,8 @@
 use v6.e.PREVIEW;
+use experimental :rakuast;
 unit class RakuAST::Matcher::ASTMatch does Positional does Associative;
 
-has @.positional handles <AT-POS EXISTS-POS>;
+has @.positional handles <head tail AT-POS EXISTS-POS>;
 has %.named      handles <keys AT-KEY EXISTS-KEY>;
 has RakuAST::Node $.node;
 method of { ::?CLASS }

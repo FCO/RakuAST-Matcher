@@ -1,4 +1,5 @@
 use v6.e.PREVIEW;
+use experimental :rakuast;
 use RakuAST::Matcher::ASTMatch;
 use RakuAST::Matcher::ASTMatcherFunction;
 

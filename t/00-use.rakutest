@@ -1,5 +1,68 @@
+#!/usr/bin/env raku
+use experimental :rakuast;
 use Test;
+use RakuAST::Matcher::ASTMatch;
 
-plan 1;
+my constant \M = RakuAST::Matcher::ASTMatch;
 
-use-ok "RakuAST::Finder";
+use-ok "RakuAST::Matcher";
+
+use RakuAST::Matcher;
+
+my $res = ast-matcher("ANY-FUNCTION-WITH-ARGS(42)").search: "say 1 + 2 + 3 + 4; say(42)";
+# ｢say(42)｣
+#  ANY-FUNCTION-WITH-ARGS => ｢say(42)｣
+
+isa-ok $res, M;
+is $res.elems, 1;
+ok $res.defined;
+isa-ok $res.head<ANY-FUNCTION-WITH-ARGS>, M;
+is $res.head<ANY-FUNCTION-WITH-ARGS>.elems, 1;
+isa-ok $res.head<ANY-FUNCTION-WITH-ARGS>.node, RakuAST::Call::Name;
+#isa-ok $res.head<ANY-FUNCTION-WITH-ARGS>.node.name, RakuAST::Name;
+is $res.head<ANY-FUNCTION-WITH-ARGS>.node.name.canonicalize, "say";
+#isa-ok $res.head<ANY-FUNCTION-WITH-ARGS>.node.args, RakuAST::ArgList;
+is $res.head<ANY-FUNCTION-WITH-ARGS>.node.args.args[0].value, 42;
+
+$res = ast-matcher("say 42").search: "say 1 + 2 + 3 + 4; say 42; print 42";
+# ｢say(42)｣
+
+isa-ok $res, M;
+is $res.elems, 1;
+ok $res.defined;
+isa-ok $res.head.node, RakuAST::Call::Name;
+#isa-ok $res.head.node.name, RakuAST::Name;
+is $res.head.node.name.canonicalize, "say";
+#isa-ok $res.head.node.args, RakuAST::ArgList;
+is $res.head.node.args.args[0].value, 42;
+
+$res =  ast-matcher("1 + ANYTHING").search: "say 1 + 2 + 3 + 4";
+# ｢1 + 2｣
+#  ANYTHING => ｢2｣
+
+isa-ok $res, M;
+is $res.elems, 1;
+ok $res.defined;
+isa-ok $res.head<ANYTHING>, M;
+is $res.head<ANYTHING>.elems, 1;
+isa-ok $res.head.node, RakuAST::ApplyInfix;
+#isa-ok $res.head.node.infix, RakuAST::Infix;
+is $res.head.node.infix.operator, "+";
+is $res.head.node.left.value, 1;
+is $res.head.node.right.value, 2;
+
+$res = ast-matcher("1 - ANYTHING").search: "say 1 + 2 + 3 + 4";
+# (ASTMatch)
+
+isa-ok $res, M;
+ok !$res.defined;
+
+$res = ast-matcher("1").search: "say 1 + 2 + 3 + 4";
+# ｢1｣
+
+isa-ok $res, M;
+is $res.elems, 1;
+ok $res.defined;
+is $res.head.node.value, 1;
+
+done-testing
